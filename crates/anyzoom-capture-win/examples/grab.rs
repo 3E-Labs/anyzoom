@@ -15,6 +15,9 @@ fn main() {
             println!("open failed: {:?}", Capture::open("no-such-camera").err());
             return;
         };
+        for line in anyzoom_capture_win::describe_modes(&camera.id).unwrap_or_default() {
+            if line.contains("1920x1080") { println!("mode {line}"); }
+        }
         let mut capture = match Capture::open(&camera.id) {
             Ok(c) => c,
             Err(e) => {

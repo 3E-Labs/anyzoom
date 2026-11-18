@@ -109,11 +109,11 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  /* lets the picture size itself from this box's width and height (cqw/cqh) */
+  container-type: size;
 }
 .preview {
   position: relative;
-  max-width: 100%;
-  max-height: 100%;
   background: var(--color-paper-3);
   outline: 1px solid var(--color-line);
   overflow: hidden;

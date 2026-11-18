@@ -3,6 +3,7 @@
 pub mod bus;
 pub mod card;
 pub mod ease;
+pub mod mode;
 pub mod pace;
 pub mod scale;
 pub mod settings;

@@ -15,7 +15,7 @@ export function Preview({ preview, status, view, onView }: Props) {
   const [dragging, setDragging] = useState(false);
 
   const src = preview?.src ?? status.src_size ?? [16, 9];
-  const aspect = src[0] > 0 && src[1] > 0 ? `${src[0]} / ${src[1]}` : "16 / 9";
+  const ratio = src[0] > 0 && src[1] > 0 ? src[0] / src[1] : 16 / 9;
 
   const notice = status.camera_error
     ? { title: "Camera unavailable", body: cameraHelp(status.camera_error) }
@@ -30,7 +30,7 @@ export function Preview({ preview, status, view, onView }: Props) {
       <div
         ref={box}
         className="preview"
-        style={{ aspectRatio: aspect, height: "100%" }}
+        style={{ aspectRatio: `${ratio}`, width: `min(100cqw, ${ratio.toFixed(4)} * 100cqh)` }}
         onWheel={(e) => onView({ ...view, zoom: wheelToZoom(view.zoom, e.deltaY) })}
       >
         {preview && <img src={`data:image/jpeg;base64,${preview.jpeg_base64}`} alt="Live picture from your camera" draggable={false} />}

@@ -5,6 +5,7 @@
 //! functions, and a wrong write could damage a device.
 #![cfg(windows)]
 
+use anyzoom_core::mode::{best_mode, Format, Mode};
 use anyzoom_core::Nv12;
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Mutex, Once};
@@ -150,6 +151,50 @@ impl IMFSourceReaderCallback_Impl for Callback_Impl {
     }
 }
 
+/// Diagnostic: one line per video mode the camera offers, plus the type the
+/// reader ends up delivering. Does not start the camera.
+pub fn describe_modes(id: &str) -> Result<Vec<String>, CaptureError> {
+    init();
+    unsafe {
+        (|| -> WinResult<Vec<String>> {
+            let source = MFCreateDeviceSource(&device_attributes(Some(id))?)?;
+            let reader = MFCreateSourceReaderFromMediaSource(&source, None)?;
+            let mut out = Vec::new();
+            let mut index = 0u32;
+            while let Ok(t) = reader.GetNativeMediaType(VIDEO, index) {
+                out.push(format!("{index}: {}", describe_type(&t)));
+                index += 1;
+            }
+            let _ = source.Shutdown();
+            Ok(out)
+        })()
+        .map_err(|e| classify(&e))
+    }
+}
+
+unsafe fn describe_type(t: &IMFMediaType) -> String {
+    let pair = |key| t.GetUINT64(key).map(|v| format!("{}x{}", v >> 32, v as u32)).unwrap_or_else(|_| "-".into());
+    let blob = |key| {
+        let mut buf = [0u8; 16];
+        match t.GetBlob(key, &mut buf, None) {
+            Ok(()) => format!("{:?}", buf.chunks(4).map(|c| i32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect::<Vec<_>>()),
+            Err(_) => "-".into(),
+        }
+    };
+    format!(
+        "sub={:08X} size={} rate={} par={} geo={} min={} pan={} panscan_on={:?} range={:?}",
+        t.GetGUID(&MF_MT_SUBTYPE).map(|g| g.data1).unwrap_or(0),
+        pair(&MF_MT_FRAME_SIZE),
+        pair(&MF_MT_FRAME_RATE),
+        pair(&MF_MT_PIXEL_ASPECT_RATIO),
+        blob(&MF_MT_GEOMETRIC_APERTURE),
+        blob(&MF_MT_MINIMUM_DISPLAY_APERTURE),
+        blob(&MF_MT_PAN_SCAN_APERTURE),
+        t.GetUINT32(&MF_MT_PAN_SCAN_ENABLED).ok(),
+        t.GetUINT32(&MF_MT_VIDEO_NOMINAL_RANGE).ok(),
+    )
+}
+
 /// An open camera delivering NV12 frames. Must be used on the thread that opened it.
 pub struct Capture {
     source: IMFMediaSource,
@@ -160,21 +205,6 @@ pub struct Capture {
     width: u32,
     height: u32,
     stride: u32,
-}
-
-struct Mode {
-    index: u32,
-    width: u32,
-    height: u32,
-    fps: f64,
-}
-
-/// Higher is better: at least ~30 fps first, then the largest picture that is
-/// not above 1080p, then the frame rate nearest 30.
-fn mode_score(m: &Mode) -> (bool, bool, u64, i64) {
-    let area = m.width as u64 * m.height as u64;
-    let fits = m.width <= 1920 && m.height <= 1080;
-    (m.fps >= 29.0, fits, if fits { area } else { u64::MAX - area }, -((m.fps - 30.0).abs() * 100.0) as i64)
 }
 
 impl Capture {
@@ -209,19 +239,22 @@ impl Capture {
         attrs.SetUnknown(&MF_SOURCE_READER_ASYNC_CALLBACK, &callback)?;
         let reader = MFCreateSourceReaderFromMediaSource(source, &attrs)?;
 
-        let mut best: Option<Mode> = None;
+        let mut modes = Vec::new();
         let mut index = 0u32;
         while let Ok(native) = reader.GetNativeMediaType(VIDEO, index) {
             let size = native.GetUINT64(&MF_MT_FRAME_SIZE).unwrap_or(0);
             let rate = native.GetUINT64(&MF_MT_FRAME_RATE).unwrap_or(0);
             let (num, den) = ((rate >> 32) as u32, rate as u32);
-            let mode = Mode { index, width: (size >> 32) as u32, height: size as u32, fps: if den == 0 { 0.0 } else { num as f64 / den as f64 } };
-            if mode.width >= 2 && mode.height >= 2 && best.as_ref().is_none_or(|b| mode_score(&mode) > mode_score(b)) {
-                best = Some(mode);
-            }
+            let format = match native.GetGUID(&MF_MT_SUBTYPE) {
+                Ok(g) if g == MFVideoFormat_MJPG => Format::Mjpeg,
+                Ok(g) if g == MFVideoFormat_YUY2 => Format::Yuy2,
+                Ok(g) if g == MFVideoFormat_NV12 => Format::Nv12,
+                _ => Format::Other,
+            };
+            modes.push(Mode { index, width: (size >> 32) as u32, height: size as u32, fps: if den == 0 { 0.0 } else { num as f64 / den as f64 }, format });
             index += 1;
         }
-        let best = best.ok_or_else(|| windows::core::Error::new(MF_E_INVALIDMEDIATYPE, "camera offers no video modes"))?;
+        let best = best_mode(modes).ok_or_else(|| windows::core::Error::new(MF_E_INVALIDMEDIATYPE, "camera offers no video modes"))?;
         let native = reader.GetNativeMediaType(VIDEO, best.index)?;
         reader.SetCurrentMediaType(VIDEO, None, &native)?;
 
@@ -234,6 +267,10 @@ impl Capture {
         reader.SetCurrentMediaType(VIDEO, None, &wanted)?;
         reader.SetStreamSelection(MF_SOURCE_READER_ALL_STREAMS.0 as u32, false)?;
         reader.SetStreamSelection(VIDEO, true)?;
+        if std::env::var_os("ANYZOOM_DEBUG").is_some() {
+            eprintln!("native {}: {}", best.index, describe_type(&native));
+            eprintln!("output: {}", describe_type(&reader.GetCurrentMediaType(VIDEO)?));
+        }
         let layout = Self::layout(&reader)?;
         Ok((reader, rx, layout))
     }
