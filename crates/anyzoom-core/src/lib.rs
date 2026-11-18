@@ -1,5 +1,6 @@
 //! Platform-neutral core of anyzoom: no OS calls, tested on any platform.
 
+pub mod bus;
 pub mod ease;
 pub mod scale;
 pub mod settings;
