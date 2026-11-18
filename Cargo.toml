@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = ["crates/anyzoom-core", "crates/anyzoom-vcam-win", "crates/anyzoom-capture-win", "crates/anyzoom-engine", "app/src-tauri"]
+default-members = ["crates/anyzoom-core"]
 exclude = ["spike"]
 
 [workspace.package]
