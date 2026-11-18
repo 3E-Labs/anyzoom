@@ -1,5 +1,0 @@
-[workspace]
-members = ["vcam", "host"]
-resolver = "2"
-[profile.release]
-panic = "abort"
