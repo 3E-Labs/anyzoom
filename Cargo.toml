@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/anyzoom-core"]
+members = ["crates/anyzoom-core", "crates/anyzoom-vcam-win", "crates/anyzoom-capture-win"]
 exclude = ["spike"]
 
 [workspace.package]

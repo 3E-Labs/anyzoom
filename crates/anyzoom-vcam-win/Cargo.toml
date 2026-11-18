@@ -1,0 +1,30 @@
+[package]
+name = "anyzoom-vcam-win"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "anyzoom's virtual camera: a Media Foundation media source loaded by the Windows camera service"
+
+[lib]
+name = "anyzoom_vcam"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+anyzoom-core = { path = "../anyzoom-core" }
+
+[target.'cfg(windows)'.dependencies]
+windows-core = "0.61"
+windows = { version = "0.61", features = [
+  "Win32_Foundation",
+  "Win32_Media_MediaFoundation",
+  "Win32_Media_KernelStreaming",
+  "Win32_System_Com",
+  "Win32_System_Com_StructuredStorage",
+  "Win32_System_Variant",
+  "Win32_System_Memory",
+  "Win32_System_SystemInformation",
+  "Win32_System_Threading",
+  "Win32_Storage_FileSystem",
+  "Win32_Security",
+  "Win32_Security_Authorization",
+] }
