@@ -1,0 +1,16 @@
+[package]
+name = "anyzoom-engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "anyzoom's pipeline: camera -> zoom -> virtual camera, on its own thread"
+
+[dependencies]
+anyzoom-core = { path = "../anyzoom-core" }
+serde = { version = "1", features = ["derive"] }
+
+[target.'cfg(windows)'.dependencies]
+anyzoom-capture-win = { path = "../anyzoom-capture-win" }
+anyzoom-vcam-win = { path = "../anyzoom-vcam-win" }
+image = { version = "0.25", default-features = false, features = ["jpeg"] }
+windows = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Com"] }

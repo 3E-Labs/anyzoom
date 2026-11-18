@@ -30,6 +30,7 @@ fn nv12_type(w: u32, h: u32) -> Result<IMFMediaType> {
         t.SetUINT64(&MF_MT_FRAME_RATE, (30u64 << 32) | 1)?;
         t.SetUINT64(&MF_MT_PIXEL_ASPECT_RATIO, (1u64 << 32) | 1)?;
         t.SetUINT32(&MF_MT_AVG_BITRATE, w * h * 12 * 30)?;
+        t.SetUINT32(&MF_MT_VIDEO_NOMINAL_RANGE, MFNominalRange_16_235.0 as u32)?;
         Ok(t)
     }
 }

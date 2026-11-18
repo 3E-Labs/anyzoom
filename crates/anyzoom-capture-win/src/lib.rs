@@ -229,6 +229,8 @@ impl Capture {
         wanted.SetGUID(&MF_MT_MAJOR_TYPE, &MFMediaType_Video)?;
         wanted.SetGUID(&MF_MT_SUBTYPE, &MFVideoFormat_NV12)?;
         wanted.SetUINT64(&MF_MT_FRAME_SIZE, ((best.width as u64) << 32) | best.height as u64)?;
+        // video range (16-235), which is what consumers of a webcam expect
+        wanted.SetUINT32(&MF_MT_VIDEO_NOMINAL_RANGE, MFNominalRange_16_235.0 as u32)?;
         reader.SetCurrentMediaType(VIDEO, None, &wanted)?;
         reader.SetStreamSelection(MF_SOURCE_READER_ALL_STREAMS.0 as u32, false)?;
         reader.SetStreamSelection(VIDEO, true)?;

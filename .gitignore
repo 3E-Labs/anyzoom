@@ -3,3 +3,7 @@ node_modules/
 dist/
 *.log
 .env*
+
+
+# Tauri generated schemas
+app/src-tauri/gen/

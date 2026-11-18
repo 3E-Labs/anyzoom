@@ -1,0 +1,31 @@
+[package]
+name = "anyzoom-app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "anyzoom: zoom and pan for any webcam"
+
+[[bin]]
+name = "anyzoom"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+anyzoom-core = { path = "../../crates/anyzoom-core" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+base64 = "0.22"
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-autostart = "2"
+tauri-plugin-single-instance = "2"
+
+[target.'cfg(windows)'.dependencies]
+anyzoom-engine = { path = "../../crates/anyzoom-engine" }
+anyzoom-capture-win = { path = "../../crates/anyzoom-capture-win" }
+
+[features]
+# enabled for release builds: serve the bundled UI instead of a dev server
+custom-protocol = ["tauri/custom-protocol"]
