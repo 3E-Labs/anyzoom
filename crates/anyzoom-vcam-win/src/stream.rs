@@ -16,6 +16,8 @@ use windows::Win32::System::Com::StructuredStorage::PROPVARIANT;
 pub(crate) const SIZES: [(u32, u32); 2] = [(1280, 720), (1920, 1080)];
 /// Requests between attempts to (re)open the frame file: about one second.
 const REOPEN_EVERY: u32 = 30;
+/// One frame at 30 fps, in the 100 ns units Media Foundation uses.
+const FRAME_100NS: u64 = 333_333;
 
 /// Where frames come from, plus everything reused between requests.
 #[derive(Default)]
@@ -113,6 +115,7 @@ pub(crate) struct Stream {
     pub(crate) source: Mutex<Option<IMFMediaSource>>,
     state: Mutex<MF_STREAM_STATE>,
     feed: Mutex<Feed>,
+    pacer: Mutex<anyzoom_core::pace::Pacer>,
 }
 
 impl Stream {
@@ -124,6 +127,7 @@ impl Stream {
             source: Mutex::new(None),
             state: Mutex::new(MF_STREAM_STATE_STOPPED),
             feed: Mutex::new(Feed::default()),
+            pacer: Mutex::new(Default::default()),
         })
     }
 
@@ -199,6 +203,12 @@ impl IMFMediaStream_Impl for Stream_Impl {
         if *lock(&self.state) != MF_STREAM_STATE_RUNNING {
             return Err(MF_E_MEDIA_SOURCE_WRONGSTATE.into());
         }
+        // Consumers ask for the next frame the moment they get one; hold each
+        // request back so the camera runs at its advertised 30 fps.
+        let wait = lock(&self.pacer).wait(unsafe { MFGetSystemTime() } as u64, FRAME_100NS);
+        if wait > 0 {
+            std::thread::sleep(std::time::Duration::from_nanos(wait * 100));
+        }
         let (w, h) = self.frame_size();
         let len = nv12_len(w, h);
         unsafe {
@@ -216,7 +226,7 @@ impl IMFMediaStream_Impl for Stream_Impl {
             let sample = MFCreateSample()?;
             sample.AddBuffer(&buffer)?;
             sample.SetSampleTime(MFGetSystemTime())?;
-            sample.SetSampleDuration(333_333)?;
+            sample.SetSampleDuration(FRAME_100NS as i64)?;
             if let Some(token) = token.as_ref() {
                 sample.SetUnknown(&MFSampleExtension_Token, token)?;
             }
