@@ -47,7 +47,13 @@ impl FrameMap {
             let _ = CreateDirectoryW(&dir, None); // already existing is fine
             restrict_access(&dir)?;
         }
-        map_file(true, true).ok_or_else(windows::core::Error::from_win32)
+        let mut map = map_file(true, true).ok_or_else(windows::core::Error::from_win32)?;
+        // Forget whatever an earlier run (or an earlier boot) left behind, so
+        // old "someone is watching" marks and old pictures are never trusted.
+        if let Some(bytes) = map.bytes_mut() {
+            anyzoom_core::bus::reset(bytes);
+        }
+        Ok(map)
     }
 
     pub fn writable(&self) -> bool {

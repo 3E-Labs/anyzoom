@@ -43,13 +43,8 @@ export default function App() {
     };
   }, [refreshState, refreshCameras]);
 
-  // The camera only needs to run for the preview while the window can be seen.
-  useEffect(() => {
-    const sync = () => api.setPreviewWanted(!document.hidden);
-    sync();
-    document.addEventListener("visibilitychange", sync);
-    return () => document.removeEventListener("visibilitychange", sync);
-  }, []);
+  // Whether the camera runs for the preview is decided by the app itself from
+  // the real window state (shown, hidden, minimised), not by this page.
 
   useEffect(() => {
     let alive = true;

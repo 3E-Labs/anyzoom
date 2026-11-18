@@ -31,7 +31,9 @@ pub struct PreviewDto {
     src: (u32, u32),
 }
 
-#[tauri::command]
+// `async` here means "run off the main thread": finding cameras can take a
+// moment and must not freeze the window.
+#[tauri::command(async)]
 pub fn list_cameras() -> Result<Vec<CameraDto>, String> {
     anyzoom_capture_win::list_cameras()
         .map(|cameras| cameras.into_iter().map(|c| CameraDto { id: c.id, name: c.name }).collect())
@@ -101,12 +103,14 @@ pub fn set_start_with_windows(app: AppHandle, state: State<'_, AppState>, on: bo
     Ok(())
 }
 
+/// The page may ask for the preview, but it only gets it while the window
+/// can really be seen: the camera light must never be on for a hidden window.
 #[tauri::command]
-pub fn set_preview_wanted(state: State<'_, AppState>, on: bool) {
-    state.engine.set_preview_wanted(on);
+pub fn set_preview_wanted(app: AppHandle, state: State<'_, AppState>, on: bool) {
+    state.engine.set_preview_wanted(on && crate::tray::window_on_screen(&app));
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_preview(state: State<'_, AppState>) -> Option<PreviewDto> {
     state.engine.preview().map(|(jpeg, crop, src)| PreviewDto {
         jpeg_base64: base64::engine::general_purpose::STANDARD.encode(jpeg),

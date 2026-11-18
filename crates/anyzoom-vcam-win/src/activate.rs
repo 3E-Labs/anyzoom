@@ -23,7 +23,11 @@ impl IMFActivate_Impl for Activator_Impl {
             g.as_ref().unwrap().query(riid, ppv).ok()
         }
     }
-    fn ShutdownObject(&self) -> Result<()> { Ok(()) }
+    fn ShutdownObject(&self) -> Result<()> {
+        // The source and its stream hold each other; only Shutdown lets go.
+        if let Some(src) = lock(&self.src).take() { unsafe { let _ = src.Shutdown(); } }
+        Ok(())
+    }
     fn DetachObject(&self) -> Result<()> { *lock(&self.src) = None; Ok(()) }
 }
 impl IMFAttributes_Impl for Activator_Impl {

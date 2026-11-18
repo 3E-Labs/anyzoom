@@ -5,12 +5,25 @@ use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager};
 
+/// True while the main window is shown and not minimised.
+pub fn window_on_screen(app: &AppHandle) -> bool {
+    app.get_webview_window("main")
+        .is_some_and(|w| w.is_visible().unwrap_or(false) && !w.is_minimized().unwrap_or(false))
+}
+
+/// Runs the physical camera for the preview only while the window is on screen.
+pub fn sync_preview(app: &AppHandle) {
+    if let Some(state) = app.try_state::<AppState>() {
+        state.engine.set_preview_wanted(window_on_screen(app));
+    }
+}
+
 pub fn show_window(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.unminimize();
         let _ = window.show();
         let _ = window.set_focus();
-        app.state::<AppState>().engine.set_preview_wanted(true);
+        sync_preview(app);
     }
 }
 

@@ -4,7 +4,12 @@ import type { Status } from "../lib/api";
 export function StatusLine({ status, version }: { status: Status; version: string }) {
   let state: JSX.Element;
   if (status.vcam_error) {
-    state = <span className="bad">VCAM // NOT INSTALLED — run install.ps1 from the anyzoom folder</span>;
+    const notInstalled = status.vcam_error.includes("80040154");
+    state = (
+      <span className="bad">
+        {notInstalled ? "VCAM // NOT INSTALLED — run install.cmd from the anyzoom folder" : `VCAM // OFF — ${status.vcam_error}`}
+      </span>
+    );
   } else if (status.camera_error) {
     state = (
       <>

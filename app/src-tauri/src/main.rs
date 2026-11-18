@@ -104,11 +104,16 @@ mod app {
                 Ok(())
             })
             .on_window_event(|window, event| {
-                // Closing the window keeps anyzoom (and its camera) running in the tray.
-                if let WindowEvent::CloseRequested { api, .. } = event {
-                    api.prevent_close();
-                    let _ = window.hide();
-                    window.state::<AppState>().engine.set_preview_wanted(false);
+                match event {
+                    // Closing the window keeps anyzoom (and its camera) running in the tray.
+                    WindowEvent::CloseRequested { api, .. } => {
+                        api.prevent_close();
+                        let _ = window.hide();
+                        tray::sync_preview(window.app_handle());
+                    }
+                    // minimise, restore, show and hide all arrive as one of these
+                    WindowEvent::Resized(_) | WindowEvent::Focused(_) | WindowEvent::Moved(_) => tray::sync_preview(window.app_handle()),
+                    _ => {}
                 }
             })
             .build(tauri::generate_context!())

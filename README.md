@@ -61,8 +61,10 @@ download, build it yourself from this source (see below).
 - Zoom is digital: it crops and enlarges. With a 1080p webcam and the default
   720p output, zoom up to 1.5× loses no detail.
 - The output is always 16:9. A 4:3 camera is cropped to fill it.
-- The frame-sharing file is private to your Windows account, so two different
-  Windows users on the same PC cannot run anyzoom at the same moment.
+- One Windows account per PC: the file video passes through is private to the
+  first account that runs anyzoom. For another account to use it, an
+  administrator has to delete `C:\ProgramData\anyzoom` first (uninstalling
+  does that).
 
 ## Privacy
 

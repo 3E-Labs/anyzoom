@@ -25,6 +25,10 @@ struct Feed {
     /// Requests in a row that found no usable frame.
     misses: u32,
     scratch: Vec<u8>,
+    /// The last complete live frame and its size, repeated when a request
+    /// lands while the app is in the middle of writing the next one.
+    good: Vec<u8>,
+    good_size: Option<(u32, u32)>,
     card: Option<(u32, u32, Card, Vec<u8>)>,
 }
 
@@ -48,23 +52,43 @@ impl Feed {
             match read_frame(map.bytes(), now, &mut self.scratch) {
                 ReadResult::Frame { w: fw, h: fh, status } if status == STATUS_LIVE => {
                     self.misses = 0;
-                    if (fw, fh) == (w, h) && self.scratch.len() == dst.len() {
-                        dst.copy_from_slice(&self.scratch);
-                        return;
-                    }
-                    let src = Nv12 { data: &self.scratch, width: fw, height: fh, stride: fw };
-                    if scale_nv12(&src, Rect { x: 0, y: 0, w: fw, h: fh }, dst, w, h).is_ok() {
+                    std::mem::swap(&mut self.scratch, &mut self.good);
+                    self.good_size = Some((fw, fh));
+                    if self.emit_good(dst, w, h) {
                         return;
                     }
                 }
                 ReadResult::Frame { .. } => {
                     self.misses = 0;
+                    self.good_size = None;
                     card = Card::Unavailable;
                 }
-                ReadResult::Stale | ReadResult::Invalid => self.misses += 1,
+                ReadResult::Busy => {
+                    if self.emit_good(dst, w, h) {
+                        return;
+                    }
+                }
+                ReadResult::Stale | ReadResult::Invalid => {
+                    self.misses += 1;
+                    self.good_size = None;
+                }
             }
         }
         self.fill_card(dst, w, h, card);
+    }
+
+    /// Copies (or scales) the last good frame into `dst`. False if there is none.
+    fn emit_good(&self, dst: &mut [u8], w: u32, h: u32) -> bool {
+        let Some((gw, gh)) = self.good_size else { return false };
+        if self.good.len() < nv12_len(gw, gh) {
+            return false;
+        }
+        if (gw, gh) == (w, h) && self.good.len() == dst.len() {
+            dst.copy_from_slice(&self.good);
+            return true;
+        }
+        let src = Nv12 { data: &self.good, width: gw, height: gh, stride: gw };
+        scale_nv12(&src, Rect { x: 0, y: 0, w: gw, h: gh }, dst, w, h).is_ok()
     }
 
     fn fill_card(&mut self, dst: &mut [u8], w: u32, h: u32, card: Card) {
@@ -117,7 +141,7 @@ impl Stream {
 
     pub(crate) fn shutdown(&self) {
         *lock(&self.source) = None;
-        lock(&self.feed).map = None;
+        *lock(&self.feed) = Feed::default(); // unmaps the frame file
         unsafe {
             let _ = self.queue.Shutdown();
         }
@@ -171,6 +195,9 @@ impl IMFMediaStream_Impl for Stream_Impl {
     fn RequestSample(&self, token: Ref<'_, IUnknown>) -> Result<()> {
         if lock(&self.source).is_none() {
             return Err(MF_E_SHUTDOWN.into());
+        }
+        if *lock(&self.state) != MF_STREAM_STATE_RUNNING {
+            return Err(MF_E_MEDIA_SOURCE_WRONGSTATE.into());
         }
         let (w, h) = self.frame_size();
         let len = nv12_len(w, h);

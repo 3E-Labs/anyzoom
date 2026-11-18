@@ -20,6 +20,8 @@ const RETRY_EVERY: Duration = Duration::from_secs(2);
 const NOTICE_EVERY: Duration = Duration::from_millis(500);
 /// An open camera that delivers nothing for this long is treated as gone.
 const SILENT_LIMIT: Duration = Duration::from_secs(3);
+/// After this long without a frame, viewers are told the camera is unavailable.
+const SILENT_NOTICE: Duration = Duration::from_millis(700);
 const PREVIEW_EVERY: Duration = Duration::from_millis(66);
 const PREVIEW_WIDTH: u32 = 640;
 
@@ -190,6 +192,9 @@ struct Worker {
     last_preview: Option<Instant>,
     fps_window: (Instant, u32),
     preview_scratch: Vec<u8>,
+    /// The zoomed frame is built here first, so the shared file is only
+    /// "being written" for the moment it takes to copy it across.
+    out: Vec<u8>,
 }
 
 impl Worker {
@@ -212,12 +217,19 @@ impl Worker {
             last_preview: None,
             fps_window: (now, 0),
             preview_scratch: Vec::new(),
+            out: Vec::new(),
         };
 
         // The frame file must exist before the camera starts asking for frames.
         let mut vcam_error = None;
         match FrameMap::create_producer() {
             Ok(map) => worker.map = Some(map),
+            Err(e) if e.code() == windows::Win32::Foundation::E_ACCESSDENIED => {
+                vcam_error = Some(
+                    "another Windows account on this PC has used anyzoom; an administrator must delete C:\\ProgramData\\anyzoom before this account can"
+                        .to_string(),
+                )
+            }
             Err(e) => vcam_error = Some(format!("could not create the frame file: {}", e.message())),
         }
         let camera = if vcam_error.is_none() {
@@ -312,14 +324,16 @@ impl Worker {
         let animator = &mut self.animator;
         let map = &mut self.map;
         let scratch = &mut self.preview_scratch;
+        let out = &mut self.out;
         let Some(capture) = self.capture.as_mut() else { return };
         let read = capture.read(200, |frame| {
             let view = animator.step(dt.as_secs_f32());
             let crop = crop_rect(frame.width, frame.height, view);
-            if let Some(bytes) = map.as_mut().and_then(|m| m.bytes_mut()) {
-                write_frame(bytes, out_w, out_h, STATUS_LIVE, now_ms(), |dst| {
-                    let _ = scale_nv12(frame, crop, dst, out_w, out_h);
-                });
+            out.resize(anyzoom_core::nv12_len(out_w, out_h), 0);
+            if scale_nv12(frame, crop, out, out_w, out_h).is_ok() {
+                if let Some(bytes) = map.as_mut().and_then(|m| m.bytes_mut()) {
+                    write_frame(bytes, out_w, out_h, STATUS_LIVE, now_ms(), |dst| dst.copy_from_slice(out));
+                }
             }
             if want_preview {
                 preview = encode_preview(frame, scratch).map(|jpeg| (jpeg, crop, (frame.width, frame.height)));
@@ -341,8 +355,13 @@ impl Worker {
                 }
             }
             Ok(false) => {
-                if now.duration_since(self.last_frame) > SILENT_LIMIT {
+                let silent = now.duration_since(self.last_frame);
+                if silent > SILENT_LIMIT {
                     self.close_camera(Some(CaptureError::Disconnected.to_string()));
+                } else if silent > SILENT_NOTICE {
+                    // say "unavailable" before the last frame goes stale, so
+                    // viewers never see the "starting" card for a lost camera
+                    self.publish_unavailable(output, now);
                 }
             }
             Err(e) => {

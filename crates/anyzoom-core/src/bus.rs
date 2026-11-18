@@ -26,6 +26,9 @@ pub const PRODUCER_STALE_MS: u64 = 1000;
 /// The consumer counts as watching for this long after its last tick.
 pub const CONSUMER_ACTIVE_MS: u64 = 2000;
 
+/// How far ahead of our own clock reading another process's stamp may be.
+const CLOCK_SLACK_MS: u64 = 100;
+
 const OFF_W: usize = 4;
 const OFF_H: usize = 8;
 const OFF_SEQ: usize = 12;
@@ -38,12 +41,23 @@ pub fn bus_file_len() -> usize {
     BUS_HEADER + nv12_len(BUS_MAX_W, BUS_MAX_H)
 }
 
+/// Header fields are read with volatile loads: another process changes them
+/// while we look, and the compiler must not assume two reads give one answer.
 fn get_u32(map: &[u8], off: usize) -> u32 {
-    u32::from_le_bytes(map[off..off + 4].try_into().unwrap())
+    assert!(off + 4 <= map.len());
+    u32::from_le_bytes(unsafe { std::ptr::read_volatile(map.as_ptr().add(off).cast::<[u8; 4]>()) })
 }
 
 fn get_u64(map: &[u8], off: usize) -> u64 {
-    u64::from_le_bytes(map[off..off + 8].try_into().unwrap())
+    assert!(off + 8 <= map.len());
+    u64::from_le_bytes(unsafe { std::ptr::read_volatile(map.as_ptr().add(off).cast::<[u8; 8]>()) })
+}
+
+/// True when `tick` was stamped no more than `limit_ms` ago. A tick from the
+/// future (beyond a small race between the two processes) is not recent: the
+/// clock restarts with Windows, so it comes from a file left by an earlier boot.
+fn recent(tick: u64, now_ms: u64, limit_ms: u64) -> bool {
+    tick <= now_ms.saturating_add(CLOCK_SLACK_MS) && now_ms.saturating_sub(tick) <= limit_ms
 }
 
 fn dims_ok(w: u32, h: u32) -> bool {
@@ -73,17 +87,22 @@ pub fn write_frame(map: &mut [u8], w: u32, h: u32, status: u32, now_ms: u64, fil
 pub enum ReadResult {
     /// `out` holds a complete frame of this size.
     Frame { w: u32, h: u32, status: u32 },
-    /// The producer has stopped, or no complete frame could be read.
+    /// The producer is in the middle of writing; show the previous frame again.
+    Busy,
+    /// The producer has stopped.
     Stale,
     /// Not a frame file, or its header makes no sense.
     Invalid,
 }
 
 /// Copies a consistent frame into `out`, retrying a few times if the
-/// producer is mid-write. Never reads outside `map`, whatever the header says.
+/// producer is mid-write (`Busy` if it still is; `out` is then undefined). Never reads outside `map`, whatever the header says.
 pub fn read_frame(map: &[u8], now_ms: u64, out: &mut Vec<u8>) -> ReadResult {
     if map.len() < BUS_HEADER || map[..4] != BUS_MAGIC {
         return ReadResult::Invalid;
+    }
+    if !recent(get_u64(map, OFF_PRODUCER), now_ms, PRODUCER_STALE_MS) {
+        return ReadResult::Stale;
     }
     for _ in 0..3 {
         let seq = get_u32(map, OFF_SEQ);
@@ -96,18 +115,20 @@ pub fn read_frame(map: &[u8], now_ms: u64, out: &mut Vec<u8>) -> ReadResult {
             return ReadResult::Invalid;
         }
         let status = get_u32(map, OFF_STATUS);
-        let tick = get_u64(map, OFF_PRODUCER);
         out.clear();
         out.extend_from_slice(&map[BUS_HEADER..BUS_HEADER + nv12_len(w, h)]);
-        if get_u32(map, OFF_SEQ) != seq {
-            continue;
+        if get_u32(map, OFF_SEQ) == seq {
+            return ReadResult::Frame { w, h, status };
         }
-        if now_ms.saturating_sub(tick) > PRODUCER_STALE_MS {
-            return ReadResult::Stale;
-        }
-        return ReadResult::Frame { w, h, status };
     }
-    ReadResult::Stale
+    ReadResult::Busy
+}
+
+/// Wipes the header and picture left by an earlier run.
+/// The producer calls this once
+/// at start-up, before the virtual camera exists.
+pub fn reset(map: &mut [u8]) {
+    map.fill(0);
 }
 
 /// Called by the virtual camera each time an app asks it for a frame.
@@ -123,7 +144,7 @@ pub fn consumer_active(map: &[u8], now_ms: u64) -> bool {
         return false;
     }
     let tick = get_u64(map, OFF_CONSUMER);
-    tick != 0 && now_ms.saturating_sub(tick) <= CONSUMER_ACTIVE_MS
+    tick != 0 && recent(tick, now_ms, CONSUMER_ACTIVE_MS)
 }
 
 #[cfg(test)]
@@ -180,8 +201,6 @@ mod tests {
         let mut out = Vec::new();
         assert!(matches!(read_frame(&m, 6_000, &mut out), ReadResult::Frame { .. }));
         assert_eq!(read_frame(&m, 6_001, &mut out), ReadResult::Stale);
-        // a reader whose clock is behind the writer's still gets the frame
-        assert!(matches!(read_frame(&m, 4_000, &mut out), ReadResult::Frame { .. }));
     }
 
     #[test]
@@ -229,14 +248,58 @@ mod tests {
     }
 
     #[test]
-    fn odd_seq_is_not_returned_as_frame() {
+    fn reader_arriving_mid_write_is_busy_not_stale() {
         let mut m = map();
         write_frame(&mut m, 1280, 720, 0, 10, pattern);
         let seq = u32::from_le_bytes(m[12..16].try_into().unwrap());
         assert_eq!(seq % 2, 0);
         m[12..16].copy_from_slice(&(seq + 1).to_le_bytes());
         let mut out = Vec::new();
-        assert_eq!(read_frame(&m, 10, &mut out), ReadResult::Stale);
+        assert_eq!(read_frame(&m, 40, &mut out), ReadResult::Busy);
+    }
+
+    #[test]
+    fn producer_that_died_mid_write_is_stale() {
+        let mut m = map();
+        write_frame(&mut m, 1280, 720, 0, 10, pattern);
+        m[12..16].copy_from_slice(&3u32.to_le_bytes());
+        let mut out = Vec::new();
+        assert_eq!(read_frame(&m, 5_000, &mut out), ReadResult::Stale);
+    }
+
+    #[test]
+    fn ticks_from_a_previous_boot_count_as_old() {
+        // The clock restarts at zero when Windows restarts, so a file left
+        // over from before the restart holds ticks far in the future.
+        let mut m = map();
+        write_frame(&mut m, 1280, 720, 0, 400_000_000, pattern);
+        touch_consumer(&mut m, 400_000_000);
+        let mut out = Vec::new();
+        assert_eq!(read_frame(&m, 60_000, &mut out), ReadResult::Stale);
+        assert!(!consumer_active(&m, 60_000));
+    }
+
+    #[test]
+    fn a_few_ms_of_clock_race_is_tolerated() {
+        let mut m = map();
+        write_frame(&mut m, 1280, 720, 0, 5_005, pattern);
+        touch_consumer(&mut m, 5_005);
+        let mut out = Vec::new();
+        assert!(matches!(read_frame(&m, 5_000, &mut out), ReadResult::Frame { .. }));
+        assert!(consumer_active(&m, 5_000));
+    }
+
+    #[test]
+    fn reset_forgets_the_previous_session() {
+        let mut m = map();
+        write_frame(&mut m, 1280, 720, 0, 10, pattern);
+        touch_consumer(&mut m, 10);
+        reset(&mut m);
+        let mut out = Vec::new();
+        assert_eq!(read_frame(&m, 10, &mut out), ReadResult::Invalid);
+        assert!(!consumer_active(&m, 10));
+        assert!(m[BUS_HEADER..BUS_HEADER + 64].iter().all(|&b| b == 0), "old picture must be wiped");
+        reset(&mut []); // must not panic
     }
 
     #[test]
