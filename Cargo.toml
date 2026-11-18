@@ -1,0 +1,14 @@
+[workspace]
+resolver = "2"
+members = ["crates/anyzoom-core"]
+exclude = ["spike"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["3E Studios"]
+
+[profile.release]
+opt-level = 3
+lto = "thin"

@@ -1,0 +1,8 @@
+[package]
+name = "anyzoom-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Platform-neutral zoom, crop, scaling and frame-sharing logic for anyzoom"
+
+[dependencies]
