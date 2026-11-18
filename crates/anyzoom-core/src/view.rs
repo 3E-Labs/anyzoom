@@ -5,7 +5,8 @@ pub const ZOOM_MAX: f32 = 4.0;
 
 /// What part of the camera image is shown. `pan_*` run from -1.0 (flush
 /// left/top) to 1.0 (flush right/bottom); 0.0 is centred.
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Debug, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
 pub struct View {
     pub zoom: f32,
     pub pan_x: f32,
