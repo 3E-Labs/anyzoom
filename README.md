@@ -1,3 +1,5 @@
+<img src="app/src-tauri/icons/icon.png" width="96" alt="anyzoom icon">
+
 # anyzoom
 
 Zoom and pan for any webcam on Windows 11.
