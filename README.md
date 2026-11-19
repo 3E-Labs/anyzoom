@@ -1,14 +1,36 @@
-<img src="app/src-tauri/icons/icon.png" width="96" alt="anyzoom icon">
+<p align="center">
+  <img src="app/src-tauri/icons/icon.png" width="96" alt="anyzoom icon: the 3E mark inside a camera viewfinder">
+</p>
 
-# anyzoom
+<h1 align="center">anyzoom</h1>
 
-Zoom and pan for any webcam on Windows 11.
+<p align="center">Zoom and pan for any webcam on Windows 11.</p>
+
+<p align="center">
+  <a href="https://github.com/3E-Labs/anyzoom/releases">Download</a> ·
+  <a href="#install">Install</a> ·
+  <a href="#using-it">Using it</a> ·
+  <a href="#build-from-source">Build from source</a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/3E-Labs/anyzoom/actions/workflows/release.yml"><img src="https://github.com/3E-Labs/anyzoom/actions/workflows/release.yml/badge.svg" alt="Build status"></a>
+  <img src="https://img.shields.io/badge/platform-Windows%2011-1F3CFF" alt="Platform: Windows 11">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/licence-MIT-1F3CFF" alt="Licence: MIT"></a>
+</p>
+
+<p align="center"><sub>An open source tool from <a href="https://github.com/3E-Labs">3E Labs</a></sub></p>
+
+---
 
 Many webcams have no zoom at all. anyzoom takes the picture from the camera
 you already own, lets you zoom from 1× to 4× and move around inside it, and
 offers the result to every other app as a camera called **anyzoom Camera**.
 Pick that camera in Meet, Zoom, Teams, Discord or OBS and they get your framed
 picture.
+
+No driver, no account, no network. One small app and one Windows camera
+component.
 
 ## Requirements
 
@@ -17,7 +39,7 @@ picture.
 
 ## Install
 
-1. Download the zip from the releases page and unzip it anywhere.
+1. Download the zip from the [releases page](https://github.com/3E-Labs/anyzoom/releases) and unzip it anywhere.
 2. Double-click `install.cmd`. Windows asks for administrator permission once,
    to register the virtual camera.
 3. Open **anyzoom** from the Start Menu.
@@ -29,7 +51,7 @@ To remove it, run `uninstall.cmd` from `C:\Program Files\anyzoom`.
 
 This first release is not code-signed, so SmartScreen may warn when you run
 it. Choose **More info**, then **Run anyway**. If you would rather not trust a
-download, build it yourself from this source (see below).
+download, build it yourself from this source (see [Build from source](#build-from-source)).
 
 ## Using it
 
@@ -68,6 +90,13 @@ download, build it yourself from this source (see below).
   administrator has to delete `C:\ProgramData\anyzoom` first (uninstalling
   does that).
 
+## What it does not do
+
+- macOS, Linux or Windows 10
+- Face tracking, backgrounds, filters, recording
+- Driving a camera's own optical or firmware zoom
+- Anything with your microphone
+
 ## Privacy
 
 anyzoom never connects to the network. It has no telemetry, no account and no
@@ -77,13 +106,6 @@ and nowhere else. Settings are stored in `%APPDATA%\anyzoom\settings.json`.
 anyzoom only reads video from your camera. It never changes camera settings
 or sends vendor-specific commands to the device.
 
-## What it does not do
-
-- macOS, Linux or Windows 10
-- Face tracking, backgrounds, filters, recording
-- Driving a camera's own optical or firmware zoom
-- Anything with your microphone
-
 ## How it works
 
 anyzoom reads frames from the webcam through Media Foundation, crops and
@@ -92,6 +114,10 @@ memory. A component registered with Windows (`anyzoom_vcam.dll`, a Media
 Foundation media source created with `MFCreateVirtualCamera`) runs inside the
 Windows camera service, reads the same mapped file and hands the frames to
 whichever app opened anyzoom Camera. No kernel driver is involved.
+
+The frame file is limited to your account and the camera service. The camera
+component checks every header field before it reads a frame, so a damaged or
+altered file cannot make it read outside the file.
 
 ```
 crates/anyzoom-core         zoom, crop, scaling, easing, settings, frame format (no OS calls, unit-tested)
@@ -122,9 +148,20 @@ Tests: `cargo test` (core logic, any platform) and `npm test` in `app/`.
 The Windows-only parts are checked by hand with
 [docs/manual-test-checklist.md](docs/manual-test-checklist.md).
 
+## Security
+
+anyzoom installs a component that runs inside the Windows camera service.
+Please report security problems privately, not in a public issue: see
+[SECURITY.md](SECURITY.md).
+
 ## Licence
 
 MIT. See [LICENSE](LICENSE). The bundled fonts (Space Grotesk, Geist, Geist
 Mono) are under the SIL Open Font License.
 
-Made by 3E Studios.
+---
+
+<sub><b>3E Labs</b> is a technology lab in New York. We make open source tools
+anyone can use, datasets technical teams can rely on, and custom software for
+companies and institutions. <a href="https://github.com/3E-Labs">More from 3E Labs</a>.
+3E Labs is the public name of 3E Studios LLC.</sub>
