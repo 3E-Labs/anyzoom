@@ -10,6 +10,7 @@
   <a href="https://github.com/3E-Labs/anyzoom/releases">Download</a> ·
   <a href="#install">Install</a> ·
   <a href="#using-it">Using it</a> ·
+  <a href="#how-it-moves">How it moves</a> ·
   <a href="#how-it-works">How it works</a> ·
   <a href="#build-from-source">Build from source</a>
 </p>
@@ -23,7 +24,7 @@
 <p align="center"><sub>An open source tool from <a href="https://github.com/3E-Labs">3E Labs</a></sub></p>
 
 <p align="center">
-  <img src="docs/images/triple-e-call.jpg" width="880" alt="Triple E, the 3E Labs mascot, at his desk waving at the webcam on top of his monitor; the monitor shows the anyzoom window">
+  <img src="docs/images/triple-e-call.jpg" width="880" alt="Triple E, the 3E Labs mascot, at his desk raising a hand to the webcam on top of his monitor; the monitor shows the anyzoom window">
 </p>
 
 ---
@@ -71,14 +72,7 @@ download, build it yourself from this source (see [Build from source](#build-fro
 - Drag the slider, or scroll on the picture, to zoom.
 - Drag the blue frame to choose which part of the picture is sent. Double-click
   it to reset.
-- Hotkeys work while any app is in front:
-
-  | Action | Default keys |
-  | --- | --- |
-  | Zoom in / out | `Ctrl+Alt+=` / `Ctrl+Alt+-` |
-  | Reset | `Ctrl+Alt+0` |
-  | Move | `Ctrl+Alt+` arrow keys |
-
+- Hotkeys work while any app is in front (see [How it moves](#how-it-moves)).
   Click a hotkey in the window to change it. If another program already owns
   a combination, anyzoom tells you which one is not working.
 - Zoom and moves glide rather than jump, so a change during a call looks like
@@ -88,8 +82,39 @@ download, build it yourself from this source (see [Build from source](#build-fro
 - **Start with Windows** (off by default) starts anyzoom in the tray so the
   camera is there before your call starts.
 
+## How it moves
+
 <p align="center">
-  <img src="docs/images/triple-e-desk.jpg" width="880" alt="Over Triple E's shoulder as he faces his monitor: the anyzoom window fills the screen, the webcam sits on top, and the preview shows his face lit in a smile">
+  <img src="docs/images/how-it-moves.gif" width="880" alt="Animation of the anyzoom window driven by hotkeys: Ctrl+Alt+= pressed eight times takes the blue frame from 1.00× to 1.80×, the arrow keys move it up and right and back, Ctrl+Alt+- zooms out to 1.50×, Ctrl+Alt+0 resets. Beside the window, the picture apps receive follows the frame smoothly">
+</p>
+
+Every hotkey press moves the view by one fixed step:
+
+| Action | Default keys | Each press |
+| --- | --- | --- |
+| Zoom in | `Ctrl+Alt+=` | +0.1×, up to 4× |
+| Zoom out | `Ctrl+Alt+-` | −0.1×, down to 1× |
+| Move left / right | `Ctrl+Alt+Left` / `Ctrl+Alt+Right` | pan −0.1 / +0.1 |
+| Move up / down | `Ctrl+Alt+Up` / `Ctrl+Alt+Down` | pan −0.1 / +0.1 |
+| Reset | `Ctrl+Alt+0` | back to 1×, centred |
+
+Pan runs from −1 (the frame against the left or top edge of the picture) to
++1 (against the right or bottom edge), with 0 in the middle. At 1× the frame
+already covers the whole picture, so moving shows no change until you zoom in.
+
+The blue frame in the window jumps to the new position at once. The picture
+apps receive follows it smoothly: each frame it covers part of the remaining
+distance, about 63% every 0.12 s, so a run of presses looks like one steady
+camera move rather than a series of cuts. Dragging the slider or the frame,
+scrolling on the picture and the **Reset** button set the same target and
+glide the same way.
+
+<p align="center">
+  <img src="docs/images/triple-e-hotkeys.jpg" width="880" alt="Three steps at Triple E's desk, each next to the anyzoom window it produces: Ctrl+Alt+= eight times gives a 1.80× frame; Ctrl+Alt+Right three times slides the frame right; Ctrl+Alt+0 resets to the whole picture">
+</p>
+
+<p align="center">
+  <img src="docs/images/triple-e-desk.jpg" width="880" alt="Over Triple E's shoulder as he faces his monitor: the anyzoom window fills the screen, the webcam sits on top, and the preview shows his face">
 </p>
 
 ### Good to know
@@ -219,10 +244,14 @@ Mono) are under the SIL Open Font License.
 ## About the pictures
 
 The character in them is Triple E, the 3E Labs mascot. The scenes are
-generated images. The anyzoom window, on its own and on the monitors, is
-anyzoom's own interface code drawn in a browser, with a picture of Triple E
-from his webcam as the camera feed. The right half of the before-and-after
-image is that picture cropped and scaled the way anyzoom does it, at 1.80×.
+generated images; the key captions on the keyboard scenes were added
+afterwards. The anyzoom window, on its own, on the monitors and in the
+animation, is anyzoom's own interface code drawn in a browser, with a picture
+of Triple E from his webcam as the camera feed. These are not screenshots
+from Windows. In the animation and in the right half of the before-and-after
+image, that picture is cropped with anyzoom's crop rule; in the animation it
+also eases with the app's time constant, step by step from the same hotkey
+values the code uses.
 
 ---
 
