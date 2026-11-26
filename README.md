@@ -238,8 +238,11 @@ Please report security problems privately, not in a public issue: see
 
 ## Licence
 
-MIT. See [LICENSE](LICENSE). The bundled fonts (Space Grotesk, Geist, Geist
-Mono) are under the SIL Open Font License.
+MIT. See [LICENSE](LICENSE). The bundled fonts are under the SIL Open Font
+License 1.1; their licence texts are in [licenses/fonts](licenses/fonts):
+[Space Grotesk](licenses/fonts/SpaceGrotesk-OFL.txt),
+[Geist](licenses/fonts/Geist-OFL.txt) and
+[Geist Mono](licenses/fonts/GeistMono-OFL.txt).
 
 ## About the pictures
 
